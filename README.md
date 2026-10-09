@@ -1,8 +1,44 @@
 # Local documentation connector for MCP
 
+[![CI](https://github.com/skyon0522-ai/mcp-document-connector/actions/workflows/test.yml/badge.svg)](https://github.com/skyon0522-ai/mcp-document-connector/actions/workflows/test.yml)
+
 Give an MCP client read-only access to one local documentation folder. A document keeps its relative path, original UTF-8 content, byte count and SHA-256, so an integration can compare an answer's source with the actual file. The manifest uses sorted POSIX paths rather than filesystem enumeration order.
 
 The included documents describe an imaginary service. They contain no customer or workspace data.
+
+The local stdio demonstration lists two fictional documents, verifies both against their source bytes, and rejects a traversal request.
+
+[Quick demo](#quick-demonstration) · [Run](#run) · [Interface and boundaries](#interface-and-boundaries) · [Validation](#validation) · [Upstream lineage](#upstream-lineage)
+
+## Quick demonstration
+
+<details>
+<summary>Observed result</summary>
+
+The standalone stdio command exited 0 and printed:
+
+```json
+{
+  "transport": "stdio",
+  "tools": ["list_documents", "read_document"],
+  "documents": [
+    {
+      "path": "getting-started.md",
+      "size_bytes": 134,
+      "sha256": "a7357007f36c6dbda6379a7c71e0438b5f9574e5b4dc98c8afedbd174d130f49"
+    },
+    {
+      "path": "runbooks/recovery.txt",
+      "size_bytes": 129,
+      "sha256": "03d092fafb54b00d80576b2751b96673a2e33eeb75db934a12d8b613d2a6cfe9"
+    }
+  ],
+  "source_bytes_verified": 2,
+  "traversal_rejected": true
+}
+```
+
+</details>
 
 ## Run
 
@@ -38,38 +74,22 @@ Document identities are canonical POSIX relative paths. Absolute paths on POSIX 
 
 Use an owner-controlled tree that is stable during requests. Upstream `safe_join` performs point-in-time resolution: it cannot prevent another process from swapping directory links between resolution and opening a file. This connector has not been verified against hostile concurrent filesystem mutation. Direct Windows runtime behavior has not been tested; the path contract is checked with Windows-shaped malicious inputs and POSIX serialization semantics under Linux.
 
-This small local adapter does not supply enterprise authorization, search indexing, a RAG pipeline or an integration platform. Connecting it to a real organization or AI host requires that system's own data-access decisions. No customer deployment, revenue or hosted CI result is claimed.
+This small local adapter does not supply enterprise authorization, search indexing, a RAG pipeline or an integration platform. Connecting it to a real organization or AI host requires that system's own data-access decisions. No customer deployment or revenue is claimed.
 
 ## Validation
 
 `test_connector.py` uses the SDK's real in-process client for UTF-8 and CRLF preservation, hashes, insertion-order independence, malicious and noncanonical paths, file and directory symlink escapes, unsupported extensions, invalid UTF-8, size boundaries and manifest-count overflow. It does not skip the symlink test if the environment cannot create a link.
 
-Observed on 2026-10-09: `22 passed in 14.68s` with `mcp==2.3.0` and `pytest==9.1.1`. The standalone stdio command exited 0 and printed:
+Observed on 2026-10-09: `22 passed in 14.68s` with `mcp==2.3.0` and `pytest==9.1.1`.
 
-```json
-{
-  "transport": "stdio",
-  "tools": ["list_documents", "read_document"],
-  "documents": [
-    {
-      "path": "getting-started.md",
-      "size_bytes": 134,
-      "sha256": "a7357007f36c6dbda6379a7c71e0438b5f9574e5b4dc98c8afedbd174d130f49"
-    },
-    {
-      "path": "runbooks/recovery.txt",
-      "size_bytes": 129,
-      "sha256": "03d092fafb54b00d80576b2751b96673a2e33eeb75db934a12d8b613d2a6cfe9"
-    }
-  ],
-  "source_bytes_verified": 2,
-  "traversal_rejected": true
-}
-```
+The expected traversal rejection also logs a tool error to stderr. It is part of the successful negative check. This result covers a real local stdio exchange and synthetic data.
 
-The expected traversal rejection also logs a tool error to stderr. It is part of the successful negative check. This result covers a real local stdio exchange and synthetic data; no external host connection or remote CI was tested.
+The linked GitHub Actions verification run passed the local test and stdio smoke steps: [view the run](https://github.com/skyon0522-ai/mcp-document-connector/actions/runs/37874314467). It does not establish interoperability with an external MCP host.
 
 ## Upstream lineage
+
+<details>
+<summary>Upstream source and attribution</summary>
 
 Runtime dependency: [`modelcontextprotocol/python-sdk` v2.3.0](https://github.com/modelcontextprotocol/python-sdk/releases/tag/v2.3.0), release commit `2118f14f8a19bc158d8a1cf90af58d85d187f849`. The SDK is installed as a pinned dependency; its protocol and path-security implementation are reused rather than recreated here.
 
@@ -82,3 +102,5 @@ Initial source scouting inspected main at `91941ed4d3985d59def99e090baa3f880c626
 - [Open issue #3589](https://github.com/modelcontextprotocol/python-sdk/issues/3589) reports OS separators and unstable ordering, and already contains another contributor's proposed fix. This repository applies deterministic POSIX identities in a separate application. It does not modify the upstream SDK, claim discovery of the issue or submit a duplicate patch.
 
 The SDK's unmodified MIT notice, including Anthropic attribution, is retained in [`LICENSES/mcp-python-sdk-MIT.txt`](LICENSES/mcp-python-sdk-MIT.txt). Local implementation changes add bounded document eligibility, source-byte metadata, canonical identities and the two read-only tool handlers. See [`LICENSE`](LICENSE) for the local code's MIT terms.
+
+</details>
