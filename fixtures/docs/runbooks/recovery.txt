@@ -1,0 +1,4 @@
+Synthetic recovery procedure
+1. Inspect the service status.
+2. Record the observed error.
+3. Restore the approved configuration.
