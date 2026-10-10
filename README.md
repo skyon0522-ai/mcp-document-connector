@@ -10,6 +10,8 @@ The local stdio demonstration lists two fictional documents, verifies both again
 
 [Quick demo](#quick-demonstration) · [Run](#run) · [Interface and boundaries](#interface-and-boundaries) · [Validation](#validation) · [Upstream lineage](#upstream-lineage)
 
+The authored [server](connector.py) exposes the two tools, [smoke test](smoke.py) exercises real stdio messages, and [contract tests](test_connector.py) cover document and path boundaries. The SDK is a pinned dependency; its reused path helper and license are identified under [upstream lineage](#upstream-lineage).
+
 ## Quick demonstration
 
 <details>
