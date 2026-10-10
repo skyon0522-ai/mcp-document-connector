@@ -10,7 +10,7 @@ import anyio
 from mcp import Client, StdioServerParameters
 
 
-async def smoke(root: Path) -> dict:
+async def smoke(root: Path, *, include_content: bool = False) -> dict:
     root = root.resolve(strict=True)
     parameters = StdioServerParameters(
         command=sys.executable,
@@ -26,6 +26,7 @@ async def smoke(root: Path) -> dict:
             paths = [document["path"] for document in documents]
             assert paths == sorted(paths) and all("\\" not in path for path in paths)
             assert paths, "The smoke root needs at least one eligible document."
+            read_documents = []
             for metadata in documents:
                 result = await client.call_tool("read_document", {"path": metadata["path"]})
                 assert not result.is_error, result
@@ -35,15 +36,20 @@ async def smoke(root: Path) -> dict:
                 assert document["sha256"] == hashlib.sha256(source).hexdigest()
                 assert document["size_bytes"] == len(source)
                 assert {key: document[key] for key in metadata} == metadata
+                if include_content:
+                    read_documents.append(document)
             rejected = await client.call_tool("read_document", {"path": "../outside.md"})
             assert rejected.is_error, "Traversal must be rejected over stdio."
-    return {
+    summary = {
         "transport": "stdio",
         "tools": tools,
         "documents": documents,
         "source_bytes_verified": len(documents),
         "traversal_rejected": True,
     }
+    if include_content:
+        summary["read_documents"] = read_documents
+    return summary
 
 
 if __name__ == "__main__":

@@ -1,0 +1,35 @@
+{
+  "transport": "stdio",
+  "tools": [
+    "list_documents",
+    "read_document"
+  ],
+  "documents": [
+    {
+      "path": "getting-started.md",
+      "size_bytes": 134,
+      "sha256": "a7357007f36c6dbda6379a7c71e0438b5f9574e5b4dc98c8afedbd174d130f49"
+    },
+    {
+      "path": "runbooks/recovery.txt",
+      "size_bytes": 129,
+      "sha256": "03d092fafb54b00d80576b2751b96673a2e33eeb75db934a12d8b613d2a6cfe9"
+    }
+  ],
+  "source_bytes_verified": 2,
+  "traversal_rejected": true,
+  "read_documents": [
+    {
+      "path": "getting-started.md",
+      "size_bytes": 134,
+      "sha256": "a7357007f36c6dbda6379a7c71e0438b5f9574e5b4dc98c8afedbd174d130f49",
+      "content": "# Synthetic integration guide\n\nThis fixture describes an imaginary local service.\nRead the runbook before changing its configuration.\n"
+    },
+    {
+      "path": "runbooks/recovery.txt",
+      "size_bytes": 129,
+      "sha256": "03d092fafb54b00d80576b2751b96673a2e33eeb75db934a12d8b613d2a6cfe9",
+      "content": "Synthetic recovery procedure\n1. Inspect the service status.\n2. Record the observed error.\n3. Restore the approved configuration.\n"
+    }
+  ]
+}

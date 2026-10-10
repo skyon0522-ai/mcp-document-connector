@@ -1,108 +1,116 @@
 # Local documentation connector for MCP
 
+Give an MCP client read-only access to one local documentation folder. A
+`read_document` response includes the original UTF-8 text, a canonical relative path, byte count
+and SHA-256, so an integration can check which source bytes it received.
+
 [![CI](https://github.com/skyon0522-ai/mcp-document-connector/actions/workflows/test.yml/badge.svg)](https://github.com/skyon0522-ai/mcp-document-connector/actions/workflows/test.yml)
 
-Give an MCP client read-only access to one local documentation folder. A document keeps its relative path, original UTF-8 content, byte count and SHA-256, so an integration can compare an answer's source with the actual file. The manifest uses sorted POSIX paths rather than filesystem enumeration order.
+![Fictional document readback](docs/assets/readback.png)
 
-The included documents describe an imaginary service. They contain no customer or workspace data.
+## Try the example
 
-The local stdio demonstration lists two fictional documents, verifies both against their source bytes, and rejects a traversal request.
+The example starts a real MCP server, lists two fictional documents, reads their
+content, checks both against the fixture files and rejects `../outside.md`.
+It saves an offline HTML report and the exact structured responses.
 
-[Quick demo](#quick-demonstration) · [Run](#run) · [Interface and boundaries](#interface-and-boundaries) · [Validation](#validation) · [Upstream lineage](#upstream-lineage)
-
-The authored [server](connector.py) exposes the two tools, [smoke test](smoke.py) exercises real stdio messages, and [contract tests](test_connector.py) cover document and path boundaries. The SDK is a pinned dependency; its reused path helper and license are identified under [upstream lineage](#upstream-lineage).
-
-## Quick demonstration
-
-<details>
-<summary>Observed result</summary>
-
-The standalone stdio command exited 0 and printed:
-
-```json
-{
-  "transport": "stdio",
-  "tools": ["list_documents", "read_document"],
-  "documents": [
-    {
-      "path": "getting-started.md",
-      "size_bytes": 134,
-      "sha256": "a7357007f36c6dbda6379a7c71e0438b5f9574e5b4dc98c8afedbd174d130f49"
-    },
-    {
-      "path": "runbooks/recovery.txt",
-      "size_bytes": 129,
-      "sha256": "03d092fafb54b00d80576b2751b96673a2e33eeb75db934a12d8b613d2a6cfe9"
-    }
-  ],
-  "source_bytes_verified": 2,
-  "traversal_rejected": true
-}
-```
-
-</details>
-
-## Run
-
-The verified environment is Ubuntu 24.04 under WSL2, Python 3.12.3. Run these commands inside this directory in WSL. The lock file records the exact packages used for verification; package installation downloads dependencies but needs no paid service or API key.
+The verified environment is Ubuntu 24.04 under WSL2 with Python 3.12.3 and the
+locked dependencies. Installation downloads packages; no API key or paid service
+is needed. From the repository directory:
 
 ```sh
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.lock
-.venv/bin/python -m pytest -q --basetemp .test-temp
-.venv/bin/python smoke.py --root fixtures/docs
+.venv/bin/python demo.py --output-dir demo-output
 ```
 
-`smoke.py` starts a separate `connector.py` process with the official SDK's `StdioServerParameters`, exchanges actual MCP messages, verifies every returned document against its source bytes, checks traversal rejection and closes the child process. It does not call an LLM or simulate stdio with an in-memory connection.
+Open `demo-output/report.html` in a browser. The output directory must be new;
+existing paths are not replaced. Inspect the committed [HTML](examples/reports/report.html)
+or [JSON](examples/reports/report.json) without installing the package.
+GitHub shows HTML source; download the file to view the report.
 
-To run the server for an existing local MCP host:
+| Observed check | Result |
+| --- | --- |
+| Tools exposed | `list_documents`, `read_document` |
+| Source files checked | 2 |
+| Original content, byte counts and hashes | Matched the fixtures |
+| Traversal request | Rejected |
+
+For `read_document({"path":"runbooks/recovery.txt"})`, the client receives:
+
+```text
+Synthetic recovery procedure
+1. Inspect the service status.
+2. Record the observed error.
+3. Restore the approved configuration.
+```
+
+The full response contains `path`, `content`, `size_bytes` and `sha256`.
+The source is [fixtures/docs/runbooks/recovery.txt](fixtures/docs/runbooks/recovery.txt).
+The fictional documents contain no customer or workspace data.
+
+## Read the implementation
+
+| Start here | What it does |
+| --- | --- |
+| [connector.py](connector.py) | Document eligibility, canonical paths, reads and MCP tool handlers |
+| [smoke.py](smoke.py) | Real stdio client, source-byte comparison and traversal check |
+| [demo.py](demo.py) | The same exchange, plus escaped HTML and JSON exports |
+| [Architecture](docs/architecture.md) | Request flow, source identity and trust boundaries |
+| [test_connector.py](test_connector.py), [test_demo.py](test_demo.py) | Path/content contracts and reproducible report checks |
+
+## Connect an MCP host
+
+Configure your local MCP host to launch:
 
 ```sh
 .venv/bin/python connector.py --root /absolute/path/to/approved-docs
 ```
 
-The host launches that command as a subprocess. No host configuration or credentials are changed by this repository. Server stdout is reserved for MCP messages.
-
-## Interface and boundaries
+The host launches that command as a subprocess. Server stdout is reserved for MCP
+messages. No host configuration or credentials are changed by the repository.
 
 | Tool | Input | Structured output |
-|---|---|---|
-| `list_documents` | `{}` | `documents`: sorted entries containing `path`, `size_bytes`, `sha256` |
-| `read_document` | `{"path":"runbooks/recovery.txt"}` | The same metadata and the original decoded `content` |
+| --- | --- | --- |
+| `list_documents` | `{}` | Sorted entries with `path`, `size_bytes`, `sha256` |
+| `read_document` | `{"path":"runbooks/recovery.txt"}` | The same metadata and original `content` |
 
-One root is required explicitly. Supported extensions are `.md`, `.txt` and `.rst`, case-insensitively. Each document must be valid UTF-8 and at most 262144 bytes. The manifest omits unsupported, oversized, unreadable, invalid UTF-8 and escaping documents. More than 256 eligible documents produce an error instead of an incomplete manifest. The connector exposes two read tools and has no document-write operation.
+## Verify
 
-Document identities are canonical POSIX relative paths. Absolute paths on POSIX or Windows, null bytes, backslashes, empty components, `.` and `..` components are rejected. The SDK's `safe_join` also checks resolved containment and rejects symlink escapes. Directory symlinks are not traversed when creating the manifest. Filesystem content is read afresh on each request; a hash identifies the bytes read during that request rather than a persistent snapshot.
+```sh
+.venv/bin/python -m pytest -q --basetemp .test-temp
+.venv/bin/python smoke.py --root fixtures/docs
+```
 
-Use an owner-controlled tree that is stable during requests. Upstream `safe_join` performs point-in-time resolution: it cannot prevent another process from swapping directory links between resolution and opening a file. This connector has not been verified against hostile concurrent filesystem mutation. Direct Windows runtime behavior has not been tested; the path contract is checked with Windows-shaped malicious inputs and POSIX serialization semantics under Linux.
+The current local suite passed 24 tests. The tests cover UTF-8 and CRLF
+preservation, hashes, ordering, noncanonical paths, symlink escapes, invalid UTF-8,
+file-size and manifest-count boundaries. The report checks use real stdio reads,
+compare committed outputs with the fixtures, check HTML escaping and refuse
+replacement of existing output. The expected traversal rejection logs a tool error
+to stderr. It is part of the successful negative check.
 
-This small local adapter does not supply enterprise authorization, search indexing, a RAG pipeline or an integration platform. Connecting it to a real organization or AI host requires that system's own data-access decisions. No customer deployment or revenue is claimed.
+The workflow runs the suite, smoke check and report command. Its new report step
+has not run on GitHub yet; consult the workflow page for remote results.
+An external MCP host or LLM integration has not been tested.
 
-## Validation
+## Boundaries
 
-`test_connector.py` uses the SDK's real in-process client for UTF-8 and CRLF preservation, hashes, insertion-order independence, malicious and noncanonical paths, file and directory symlink escapes, unsupported extensions, invalid UTF-8, size boundaries and manifest-count overflow. It does not skip the symlink test if the environment cannot create a link.
+Supported extensions are `.md`, `.txt` and `.rst`, case-insensitively. Documents
+must be valid UTF-8 and at most 262144 bytes. The manifest omits ineligible or
+escaping files. More than 256 eligible documents produces an error rather than a
+partial manifest. The connector exposes two read tools and no write operation.
 
-Observed on 2026-10-09: `22 passed in 14.68s` with `mcp==2.3.0` and `pytest==9.1.1`.
+Absolute paths, null bytes, backslashes, empty components, `.` and `..` are
+rejected. Resolved paths must remain in the configured root; directory symlinks
+are not traversed. Use an owner-controlled tree that stays stable during requests.
+Point-in-time containment checks do not prevent hostile concurrent link swaps.
 
-The expected traversal rejection also logs a tool error to stderr. It is part of the successful negative check. This result covers a real local stdio exchange and synthetic data.
+A hash identifies bytes read in one request. It does not authenticate an author,
+verify an answer or establish a persistent snapshot. Direct Windows execution,
+enterprise authorization, a search index and a RAG pipeline are outside the
+verification here. No customer deployment or production outcome is claimed.
 
-The linked GitHub Actions verification run passed the local test and stdio smoke steps: [view the run](https://github.com/skyon0522-ai/mcp-document-connector/actions/runs/37874314467). It does not establish interoperability with an external MCP host.
+## License
 
-## Upstream lineage
-
-<details>
-<summary>Upstream source and attribution</summary>
-
-Runtime dependency: [`modelcontextprotocol/python-sdk` v2.3.0](https://github.com/modelcontextprotocol/python-sdk/releases/tag/v2.3.0), release commit `2118f14f8a19bc158d8a1cf90af58d85d187f849`. The SDK is installed as a pinned dependency; its protocol and path-security implementation are reused rather than recreated here.
-
-Initial source scouting inspected main at `91941ed4d3985d59def99e090baa3f880c626cc8`. Execution used the released v2.3.0 API and package, not that later main revision. The installed `safe_join` module SHA-256 matched the inspected release file exactly: `e9045fa4bddc28e102a50bbbf527fe62995358630b8131a427ea0b2cf2647ca1`.
-
-- [`safe_join` source](https://github.com/modelcontextprotocol/python-sdk/blob/2118f14f8a19bc158d8a1cf90af58d85d187f849/src/mcp/shared/path_security.py): imported directly for filesystem containment. Its race limitation is retained above.
-- [Original testing guide](https://github.com/modelcontextprotocol/python-sdk/blob/2118f14f8a19bc158d8a1cf90af58d85d187f849/docs/get-started/testing.md): `Client(server, raise_exceptions=True)` and assertions on returned fields.
-- [Original stdio client](https://github.com/modelcontextprotocol/python-sdk/blob/2118f14f8a19bc158d8a1cf90af58d85d187f849/docs_src/client_transports/tutorial004.py): subprocess launch with `StdioServerParameters`.
-- [Original directory resource](https://github.com/modelcontextprotocol/python-sdk/blob/2118f14f8a19bc158d8a1cf90af58d85d187f849/src/mcp/server/mcpserver/resources/types.py): reference for directory enumeration behavior, rather than copied implementation.
-- [Open issue #3589](https://github.com/modelcontextprotocol/python-sdk/issues/3589) reports OS separators and unstable ordering, and already contains another contributor's proposed fix. This repository applies deterministic POSIX identities in a separate application. It does not modify the upstream SDK, claim discovery of the issue or submit a duplicate patch.
-
-The SDK's unmodified MIT notice, including Anthropic attribution, is retained in [`LICENSES/mcp-python-sdk-MIT.txt`](LICENSES/mcp-python-sdk-MIT.txt). Local implementation changes add bounded document eligibility, source-byte metadata, canonical identities and the two read-only tool handlers. See [`LICENSE`](LICENSE) for the local code's MIT terms.
-
-</details>
+Local code is [MIT-licensed](LICENSE). The dependency's required MIT notice is
+retained in [LICENSES/mcp-python-sdk-MIT.txt](LICENSES/mcp-python-sdk-MIT.txt).
